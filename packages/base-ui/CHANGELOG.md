@@ -1,5 +1,21 @@
 # @navecss/base-ui
 
+## 0.4.0
+
+### Minor Changes
+
+- 988a48b: The Button's default variant and the Toggle gain a hover and press fill. Until now only the `primary` and `ghost` variants changed under the pointer; a button with no `variant`, or `variant="secondary"`, did nothing. It now takes `--nave-color-action-secondary-hover` under the pointer and `--nave-color-action-secondary-active` while pressed, on the fill only, so the text stays `--nave-color-content-primary` and the border stays `--nave-color-border-control`. This reaches the twelve parts that carry the button's class (`Button`, `Toolbar.Button`, `Dialog.Trigger`, `Dialog.Close`, `AlertDialog.Trigger`, `AlertDialog.Close`, `Popover.Trigger`, `Popover.Close`, `Menu.Trigger`, `Tooltip.Trigger`, `Toast.Action` and `Toast.Close`) and the Toggle, which takes the same fills pressed or not. A disabled part takes neither, and the `primary` and `ghost` variants are untouched. The shadcn registry's copies of these components carry the same rules; a file you copied with an earlier release keeps its own.
+
+  The peer range of `@navecss/tokens` is raised from `>=0.4.0 <1.0.0` to `>=0.5.0 <1.0.0`, because the two colours exist from `@navecss/tokens` 0.5.0. On 0.4.x the fill would go transparent under the pointer.
+
+  After upgrading, re-run `navecss-tokens build` and commit what it writes, or a committed tokens file renders the secondary button with a transparent fill under the pointer and while pressed.
+
+  If you supply your own full colour set (the fifth rung of the theming ladder), it must now supply `--nave-color-action-secondary-hover` and `--nave-color-action-secondary-active` as well. If you override `--nave-color-action-secondary`, override these two with it, or the states keep Nave's colours over yours.
+
+### Patch Changes
+
+- 20be3b8: A `ghost` button now keeps its fill while open only when what it opens is a menu, a popover or a dialog. The fill was keyed on `aria-expanded="true"` alone, so a ghost button used as the trigger of a `Collapsible`, an `Accordion`, a `NavigationMenu` or a `Select` held the same fill for as long as it was open, though the fill was only meant to mark an open menu, popover or dialog. On a `Collapsible` or `Accordion` trigger it reads as a pressed button, and while the section stays open a keyboard user can move focus to a neighbouring control, whose focus ring then lands on the held fill wherever the two sit closer together than the ring reaches; with the default tokens, in the dark scheme, that ring is below 3:1 against the fill. The key now also requires `aria-haspopup` to be `menu`, `true` or `dialog`, which Base UI sets on the `Menu`, `Popover`, `Dialog` and `Alert Dialog` triggers (including the `Menu.Trigger` in a Menubar), so those keep the fill. The other triggers show none while open, and still fill under the pointer and while pressed.
+
 ## 0.3.0
 
 ### Minor Changes
