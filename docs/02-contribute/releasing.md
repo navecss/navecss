@@ -1,8 +1,8 @@
 # Releasing
 
-How a new version of `@navecss/tokens` and `@navecss/core` gets to npm. These two packages always release together at the same version (they are a `fixed` group in `.changeset/config.json`); `@navecss/stylelint-config`, `@navecss/eslint-plugin` and `@navecss/base-ui` version independently of that pair ([ADR 0009](../04-adr/0009-release-topology.md)), and `@navecss/cli` and `@navecss/prune` are not published yet.
+How a new version of `@navecss/tokens`, `@navecss/core` and `@navecss/prune` gets to npm. These three packages always release together at the same version (they are a `fixed` group in `.changeset/config.json`: `prune` calls core's reader, [ADR 0009](../04-adr/0009-release-topology.md)); `@navecss/stylelint-config`, `@navecss/eslint-plugin` and `@navecss/base-ui` version independently of them, and `@navecss/cli` is not published yet. `@navecss/prune`'s first version is published by hand, as "A package's first release" below describes, and every later one releases like the other two.
 
-You need publish rights on both packages on npmjs.com, with two-factor authentication on your npm account.
+You need publish rights on all three packages on npmjs.com, with two-factor authentication on your npm account.
 
 ## How it works
 
@@ -20,7 +20,7 @@ Every pull request that changes a published package adds a changeset file under 
 pnpm changeset version
 ```
 
-This consumes every pending changeset, bumps each package a changeset names to its new version (`tokens` and `core` always move together), and writes the new section of each bumped package's `CHANGELOG.md`. Read the changelogs, commit, open a pull request (for example `chore/version-packages`) and merge it.
+This consumes every pending changeset, bumps each package a changeset names to its new version (`tokens`, `core` and `prune` always move together), and writes the new section of each bumped package's `CHANGELOG.md`. Read the changelogs, commit, open a pull request (for example `chore/version-packages`) and merge it.
 
 `.changeset/config.json` sets `onlyUpdatePeerDependentsWhenOutOfRange` so that this step never rewrites a peer range on its own. `@navecss/stylelint-config`, `@navecss/eslint-plugin` and `@navecss/base-ui` each declare a peer range on `tokens` or `core` that states the oldest version they are known to work with, and a new release of `tokens` or `core` is not a reason to raise it. Without the option, Changesets moves that range to the new version on every release; with it, a peer range moves only when a release leaves it, for example when `core` reaches `1.0.0`. The option sits under an `experimental` key that Changesets validates loosely: if an upgrade renames or drops it, the key is ignored without an error. What catches that is the tests that pin the declared peer ranges, in `packages/stylelint-config` and `packages/eslint-plugin`. They fail on the version pull request when a range has been rewritten, so fix the range and the config key there, before merging.
 
@@ -44,13 +44,13 @@ From the **Actions** tab, open the **release** workflow and choose **Run workflo
 gh workflow run release.yml --ref main
 ```
 
-The workflow rebuilds from clean, runs the packaging checks, packs each package and stages it: `@navecss/tokens` first, then `@navecss/core`. The end of its log lists what was staged and the order to approve it in. Nothing is installable yet.
+The workflow rebuilds from clean, runs the packaging checks, packs each package and stages it: `@navecss/tokens` first, then `@navecss/core`, then `@navecss/prune` from its second version on. The end of its log lists what was staged and the order to approve it in. Nothing is installable yet.
 
 It only runs on `main`: started from any other branch, the job is skipped.
 
 ## 3. Approve
 
-Approve `@navecss/tokens` first, then `@navecss/core`. `core` depends on the matching `tokens` version, so approving it first would put a `core` release live whose dependency does not exist yet.
+Approve `@navecss/tokens` first, then `@navecss/core`, then `@navecss/prune` once it is staged (from its second version on). `core` depends on the matching `tokens` version, so approving it first would put a `core` release live whose dependency does not exist yet, and `prune` peers on the matching `core`.
 
 Approve only versions staged by a release workflow run on `main`: each run's log lists what it staged. If the queue holds a version you cannot match to such a run, do not approve it; find out where it came from first.
 
@@ -68,9 +68,10 @@ npm stage approve <stage-id>
 ```sh
 npm view @navecss/tokens version
 npm view @navecss/core version
+npm view @navecss/prune version
 ```
 
-Both should print the new version. On npmjs.com, each package page shows a provenance badge linking to the workflow run that built it.
+All three should print the new version. On npmjs.com, each package page shows a provenance badge linking to the workflow run that built it.
 
 For each release of `@navecss/base-ui` that ships the shadcn registry (`dist/registry/` in its tarball), also check that jsDelivr serves that registry as published and that a component installs from it:
 
@@ -82,7 +83,7 @@ It fetches every file of the released tarball's `dist/registry/` from jsDelivr a
 
 ## 5. Tag the release and create the GitHub Releases
 
-A staged version is not a release until it is approved, so the workflow creates no tags and no GitHub Releases. Once both versions are live, create one GitHub Release per package, which also creates its tag. Use the commit the workflow ran on and that version's section of the package's `CHANGELOG.md` as the notes. The target must be the full 40-character sha: the workflow run's page shows only the short one, and `gh release create` refuses a short sha when the tag does not exist yet. Get the full sha from the run (its id is the number after `/actions/runs/` in the run page's address, and `gh run list --workflow release.yml` lists it too):
+A staged version is not a release until it is approved, so the workflow creates no tags and no GitHub Releases. Once all three versions are live, create one GitHub Release per package, which also creates its tag. Use the commit the workflow ran on and that version's section of the package's `CHANGELOG.md` as the notes. The target must be the full 40-character sha: the workflow run's page shows only the short one, and `gh release create` refuses a short sha when the tag does not exist yet. Get the full sha from the run (its id is the number after `/actions/runs/` in the run page's address, and `gh run list --workflow release.yml` lists it too):
 
 ```sh
 gh run view <run-id> --json headSha -q .headSha
@@ -93,6 +94,8 @@ or expand the short one from a clone that has fetched `main`: `git rev-parse <sh
 ```sh
 awk '/^## 0.1.1$/{found=1; next} /^## /{found=0} found' packages/tokens/CHANGELOG.md > tokens-notes.md
 gh release create @navecss/tokens@0.1.1 --target <full-sha> --title "@navecss/tokens 0.1.1" --notes-file tokens-notes.md --latest=false
+awk '/^## 0.1.1$/{found=1; next} /^## /{found=0} found' packages/prune/CHANGELOG.md > prune-notes.md
+gh release create @navecss/prune@0.1.1 --target <full-sha> --title "@navecss/prune 0.1.1" --notes-file prune-notes.md --latest=false
 awk '/^## 0.1.1$/{found=1; next} /^## /{found=0} found' packages/core/CHANGELOG.md > core-notes.md
 gh release create @navecss/core@0.1.1 --target <full-sha> --title "@navecss/core 0.1.1" --notes-file core-notes.md --latest
 ```
@@ -106,7 +109,7 @@ Trusted publishing cannot create a package: every credential-free path npm offer
 A new publishable package's first version goes live by hand, the same way the first version (`0.1.0`) of `@navecss/tokens` and `@navecss/core` did:
 
 1. Merge the pull request that adds the package, as usual: with its changeset, and with the package added to `PUBLISHABLE_SET` in `scripts/check-publishable-set.mjs` (the full check fails until it is). If the package already exists in the workspace as a private package (as `@navecss/cli` does today), the same pull request also removes `"private": true` from its `package.json` and removes it from `ignore` in `.changeset/config.json`: Changesets never versions a package on that list, and the same full check fails while a publishable package is still on it.
-2. Version it as in "1. Version the packages" above, and merge the version pull request.
+2. Version it as in "1. Version the packages" above, and merge the version pull request. If the package's README says it is not on npm yet, remove that sentence in the version pull request, since step 3 publishes from the commit that merges it. `@navecss/prune`'s tests fail while the Installation section of its README says it is not on npm yet and its version is not `0.0.0`.
 3. From that commit, with a clean working tree, build, then pack and publish the package by hand under two-factor authentication. `dist` is not committed, so packing without building first would publish a package with nothing in it, and a published version can never be replaced:
    ```sh
    pnpm install --frozen-lockfile
@@ -131,4 +134,4 @@ After that, the package releases through the flow above like every other package
 - **A staged version is wrong**: reject it from the Staged Packages tab, or with `npm stage reject <stage-id>`. It never went live. Fix the problem, version again and run the workflow again.
 - **Do not run the workflow again while a staged version is waiting for approval.** It checks which versions are live, not which are staged, so it would try to stage the same version a second time. Approve or reject what is pending first.
 - **`HTTP 422 ... tag_name is not a valid tag ... Release.target_commitish is invalid` from `gh release create`**: the `--target` was not accepted, most often because it is a short sha and the tag does not exist yet. Run it again with the full 40-character sha of a commit that is on GitHub (section 5, "Tag the release and create the GitHub Releases", shows how to get it).
-- **Only one of the two packages went live**: approve the other one. If `tokens` is live and `core` is not, that is harmless for a while; the reverse is the case step 3 exists to prevent.
+- **Only some of the three packages went live**: approve the others, in step 3's order. If `tokens` is live and `core` is not, or `core` is live and `prune` is not, that is harmless for a while; the reverse of either is the case step 3 exists to prevent.

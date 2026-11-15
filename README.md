@@ -60,6 +60,7 @@ without claiming conformance, certification or endorsement.
 | --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `@navecss/tokens`                                               | DTCG 2025.10 token source + first-party build pipeline                                                                                                   |
 | `@navecss/core`                                                 | Layer architecture, reset, atomic utilities, Vite plugin, PostCSS plugin, Lightning CSS adapter, `navecss-core` command                                  |
+| [`@navecss/prune`](packages/prune#readme)                       | Next.js: a PostCSS plugin and a `next.config` wrapper that ship only the atoms the build can read a use for                                              |
 | [`@navecss/stylelint-config`](packages/stylelint-config#readme) | `@nave` known to stylelint, `var()`-or-keyword values on listed properties, an `outline: none` / `outline: 0` check, declared `--nave-*` names           |
 | [`@navecss/eslint-plugin`](packages/eslint-plugin#readme)       | A literal class in `className` unless declared, or a literal value on a tokenized `style` property, reported                                             |
 | [`@navecss/base-ui`](packages/base-ui#readme)                   | Base UI's components wrapped and styled with Nave's tokens: the same parts, props and behaviour, plus one stylesheet and `variant` and `size` on buttons |
@@ -94,7 +95,8 @@ no resolver at all: the page links
 **A build step that resolves `@nave`.** On Vite that is the plugin below, and it
 is the one route this page teaches; on a pipeline that runs PostCSS plugins and
 is not Vite, [the PostCSS plugin](packages/core/README.md#postcss-plugin-setup)
-does the same; a host that runs Lightning CSS directly uses
+does the same; on Next.js, [`@navecss/prune`](packages/prune#readme) does that and ships
+only the atoms its build can read a use for; a host that runs Lightning CSS directly uses
 [the Lightning CSS adapter](packages/core/README.md#lightning-css-adapter-setup),
 and a project with no build tool at all uses
 [`navecss-core expand`](#without-a-bundler). Either way `@nave` is resolved at
@@ -801,3 +803,7 @@ MIT © Nave Contributors
 The MIT licence covers the code. The "Nave" and "NaveCSS" names and the Nave mark are trademarks of
 the project and are not covered by it: see [TRADEMARKS.md](./TRADEMARKS.md). Short version: yes, say
 you are built with NaveCSS and show the mark unmodified; no, do not make it your own logo.
+
+NaveCSS is not affiliated with, endorsed by or sponsored by Vercel or the Next.js project.
+
+Vercel, the Vercel design, Next.js and related marks, designs and logos are trademarks or registered trademarks of Vercel, Inc. or its affiliates in the US and other countries.

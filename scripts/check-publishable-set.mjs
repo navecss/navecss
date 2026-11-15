@@ -10,14 +10,15 @@
  * packages matched the publishing scope decided for this release.
  *
  * Exactly `@navecss/tokens`, `@navecss/core`, `@navecss/stylelint-config`,
- * `@navecss/eslint-plugin` and `@navecss/base-ui` are meant to publish
+ * `@navecss/eslint-plugin`, `@navecss/base-ui` and `@navecss/prune` are meant to publish
  * (`@navecss/cli` stays unpublished until the component registry exists).
  * `@navecss/stylelint-config`, `@navecss/eslint-plugin` and `@navecss/base-ui` all
  * version independently of the `tokens`/`core` pair: none shares that pair's
  * token/component contract (`stylelint-config`'s is with Stylelint and the `@nave`
  * grammar; `eslint-plugin`'s is with ESLint and a peer range on `@navecss/core`;
  * `base-ui`'s is with Base UI and a peer range on `@navecss/tokens`; none is ever
- * in a `fixed` group). This script
+ * in a `fixed` group). `@navecss/prune` is the exception: it calls core's reader, so it
+ * joins the `tokens`/`core` `fixed` group (ADR 0009). This script
  * fails the moment a
  * workspace package's `private` field stops matching that set — in either
  * direction, so a package that SHOULD stay private losing that field is
@@ -48,7 +49,7 @@ import { findWorkspaceGlobViolation } from './check-license-parity.mjs'
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
 /**
-The set of package names meant to publish at 0.1.0.
+The set of package names meant to publish.
  */
 export const PUBLISHABLE_SET = new Set([
   '@navecss/tokens',
@@ -56,6 +57,7 @@ export const PUBLISHABLE_SET = new Set([
   '@navecss/stylelint-config',
   '@navecss/eslint-plugin',
   '@navecss/base-ui',
+  '@navecss/prune',
 ])
 
 // A plain npm package name, scoped or not; anything else (a glob, a negation, an empty string) is
@@ -328,7 +330,7 @@ export function main(rootDir = ROOT) {
       console.error(`  - ${name}: publishable (no "private": true) but not in the expected set`)
     }
     for (const name of unexpectedlyPrivate) {
-      console.error(`  - ${name}: "private": true but expected to publish at 0.1.0`)
+      console.error(`  - ${name}: "private": true but is meant to publish`)
     }
     console.error(
       '\nIf this is a deliberate scope change, update PUBLISHABLE_SET in ' +

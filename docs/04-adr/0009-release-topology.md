@@ -97,3 +97,30 @@ development dependency only, because the stylesheet is built from core's atoms w
 is built and nothing of core is loaded at the consumer's runtime. Its build is `tsc` to `dist/`,
 one module per source file, no bundler, so each part's `'use client'` directive survives. A
 visual change to the stylesheet is a `minor`, since a consumer's page looks different.
+
+## Update: `@navecss/prune` joins the fixed pair
+
+A sixth published package, `@navecss/prune`, trims the atom layer of a Next.js build to the atoms
+the build can read a use for. Unlike the three packages above it **joins the `fixed` group** with
+`@navecss/tokens` and `@navecss/core`, so the three always release at the same version.
+
+The reasoning is what it calls. `@navecss/prune` reads a project's `cx()` calls through core's
+reader (the `@navecss/core/collect` subpath), the same one the Vite plugin uses, and what it
+ships depends on what that reader recognises. A consumer on Next.js and a consumer on Vite who
+read the same source with two different versions of that reader would be shipped different
+atoms, with no change in their code to explain it. That is the shared-contract argument that
+puts `tokens` and `core` together, and it is the opposite of the argument that keeps
+`@navecss/stylelint-config`, `@navecss/eslint-plugin` and `@navecss/base-ui` apart: they read
+a public token or atom list that a peer range can follow, while this package runs core's own
+code to decide what to ship. A range would let the two drift; a `fixed` group cannot.
+
+It keeps its peer dependency on `@navecss/core` (`workspace:^`, which a release turns into
+`^` and the version released with it) and does not move to `dependencies`: the project already
+installs core to call `cx()`, and one copy of it is what the reader needs. It also stays out of
+the `linked` list and is not `ignore`d.
+
+Because it is a package of its own that a first release cannot stage, its first version is
+published by hand under two-factor authentication, as
+[the release guide](../02-contribute/releasing.md) describes for a package's first release. From
+its next version on it stages and is approved with the others, after `@navecss/core`, since it
+peers on it.
