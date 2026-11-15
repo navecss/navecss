@@ -6,6 +6,7 @@
  * package's oldest `CHANGELOG.md` section once a release has consumed it, so a later changeset or a
  * later release does not move what is read.
  */
+import assert from 'node:assert/strict'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -84,7 +85,7 @@ const fixtureDirectories: string[] = []
 afterAll(() => {
   for (const directory of fixtureDirectories) {
     rmSync(directory, { recursive: true, force: true })
-    expect(existsSync(directory), `${directory} is removed`).toBe(false)
+    assert.equal(existsSync(directory), false, `${directory} is removed`)
   }
 })
 
