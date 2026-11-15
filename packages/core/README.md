@@ -625,11 +625,14 @@ path, outside `node_modules`, so its calls are reported as yours, in the dev ser
 
 A class the build does not read (in a server template or CMS text, assembled where the build cannot see it, or applied at run time by a package listed in `keepFor`) has no rule in the production stylesheet unless its atom is listed in `keep` or in a `keepFor` entry (`nave-sr-only-focusable` also has its rule whenever `nave-sr-only` has one). An element carrying such a class renders as if the class were absent: a `nave-sr-only` or `nave-sr-only-focusable` element is shown, a `nave-hidden` or `nave-hide-*` element is displayed, and a `nave-focus-ring` element falls back to the browser's default focus indicator. A `nave-hidden` or `nave-hide-*` element that other styles also keep out of sight (moved off-screen, made transparent or clipped) stays out of sight but can take keyboard focus and is exposed to screen readers. The dev server serves the atoms the build would ship, chosen from the code it has read, so a class the build does not read has no rule in dev either. The dev server can still keep a rule the build drops, for code it read and the build does not (such as a module the page stopped importing while the dev server ran), and lack one the build keeps, for a class rendered only on a server that runs outside the dev server's process, so a page can still look and behave differently in dev than in the build. Before you ship, run your checks, keyboard, screen-reader and automated accessibility checks included, against the production build: `vite build` then `vite preview` for a client-rendered app, or your production server for a server-rendered one.
 
-A package listed in `keepFor` can give `cx` to your code without the build failing if it redefines or adds a method on `Function.prototype` or `Object.prototype`, or declares its own function under one of the names compilers reserve for their interop helpers, such as `__importStar`: the build cannot see either.
-
 A class your code takes at run time from `@navecss/core/atoms` (`atomClassMap[variant]`,
 `toClassName('grid')`) is one the build does not read: it neither reads nor refuses it, so list its
 atom in `keep`.
+
+A package listed in `keepFor` can give `cx` to your code without the build failing if it redefines
+or adds a method on `Function.prototype` or `Object.prototype`, or declares its own function under
+one of the names compilers reserve for their interop helpers, such as `__importStar`: the build
+cannot see either.
 
 If your pages are rendered outside the build, by a backend that serves its own templates and uses
 Vite for its assets only, the build reads none of their classes. While `keep` is empty, the plugin
