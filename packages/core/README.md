@@ -631,6 +631,11 @@ A class your code takes at run time from `@navecss/core/atoms` (`atomClassMap[va
 `toClassName('grid')`) is one the build does not read: it neither reads nor refuses it, so list its
 atom in `keep`.
 
+A package listed in `keepFor` can give `cx` to your code without the build failing if it redefines
+or adds a method on `Function.prototype` or `Object.prototype`, or declares its own function under
+one of the names compilers reserve for their interop helpers, such as `__importStar`: the build
+cannot see either.
+
 If your pages are rendered outside the build, by a backend that serves its own templates and uses
 Vite for its assets only, the build reads none of their classes. While `keep` is empty, the plugin
 warns when it has read no HTML page, no server render and no use of Nave at all: no `cx()` call, no
