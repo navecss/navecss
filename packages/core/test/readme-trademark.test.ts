@@ -23,11 +23,11 @@ const fingerprint = (text: string): { bytes: number; sha256: string } => ({
 })
 
 /**
- * Whether the text's last two paragraphs are the two lines, in this order, and it ends in one
- * line feed.
+ * Whether the text ends with the two lines as its last two paragraphs, in this order, and one line
+ * feed.
  */
-const endsWithNotice = (text: string): boolean =>
-  text.endsWith(`\n\n${NOT_AFFILIATED}\n\n${ATTRIBUTION}\n`) && !text.endsWith('\n\n\n')
+const hasNoticeAtEnd = (text: string): boolean =>
+  text.endsWith(`\n\n${NOT_AFFILIATED}\n\n${ATTRIBUTION}\n`)
 
 describe('core README: the trademark notice', () => {
   it('has the two lines byte for byte', () => {
@@ -36,22 +36,22 @@ describe('core README: the trademark notice', () => {
   })
 
   it('ends with them as its last two paragraphs', () => {
-    expect(endsWithNotice(readFileSync(README, 'utf8'))).toBe(true)
+    expect(hasNoticeAtEnd(readFileSync(README, 'utf8'))).toBe(true)
   })
 
   it('control: a README with either line removed fails', () => {
     const readme = readFileSync(README, 'utf8')
-    expect(endsWithNotice(readme.replace(`${NOT_AFFILIATED}\n\n`, ''))).toBe(false)
-    expect(endsWithNotice(readme.replace(`\n\n${ATTRIBUTION}`, ''))).toBe(false)
+    expect(hasNoticeAtEnd(readme.replace(`${NOT_AFFILIATED}\n\n`, ''))).toBe(false)
+    expect(hasNoticeAtEnd(readme.replace(`\n\n${ATTRIBUTION}`, ''))).toBe(false)
   })
 
   it('control: the two lines in the other order fail', () => {
     const readme = readFileSync(README, 'utf8')
     expect(
-      endsWithNotice(
+      hasNoticeAtEnd(
         readme.replace(
           `${NOT_AFFILIATED}\n\n${ATTRIBUTION}`,
-          `${ATTRIBUTION}\n\n${NOT_AFFILIATED}`,
+          () => `${ATTRIBUTION}\n\n${NOT_AFFILIATED}`,
         ),
       ),
     ).toBe(false)

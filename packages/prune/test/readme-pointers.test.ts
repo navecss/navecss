@@ -49,17 +49,17 @@ const countOf = (text: string, part: string): number => text.split(part).length 
 /**
  * Core's README holds the setup sentence once, straight after the Astro clause.
  */
-const holdsSetup = (text: string): boolean => countOf(text, `has its config). On\n${SETUP}`) === 1
+const hasSetup = (text: string): boolean => countOf(text, `has its config). On\n${SETUP}`) === 1
 
 /**
  * Core's README opens its Next.js section with the paragraph, before the older one.
  */
-const holdsNextjsOpening = (text: string): boolean => countOf(text, NEXTJS_OPENING) === 1
+const hasNextjsOpening = (text: string): boolean => countOf(text, NEXTJS_OPENING) === 1
 
 /**
  * Core's README appends the sentence to the landed sentence, on its last line.
  */
-const holdsSentence = (text: string): boolean =>
+const hasSentence = (text: string): boolean =>
   countOf(
     text,
     `so does a page with no bundler, which links the standalone\nstylesheet. ${SENTENCE}\n\nA server build leaves`,
@@ -68,7 +68,7 @@ const holdsSentence = (text: string): boolean =>
 /**
  * The root README's table has the row straight after core's.
  */
-const holdsRow = (text: string): boolean => {
+const hasRow = (text: string): boolean => {
   const lines = text.split('\n')
   const core = lines.findIndex((line) => line.startsWith('| `@navecss/core` '))
   return core !== -1 && countOf(text, `${TABLE_ROW}\n`) === 1 && lines[core + 1] === TABLE_ROW
@@ -77,51 +77,51 @@ const holdsRow = (text: string): boolean => {
 /**
  * The root README names the package in the clause after "the PostCSS plugin"'s line.
  */
-const holdsClause = (text: string): boolean => countOf(text, `${CLAUSE}\n`) === 1
+const hasClause = (text: string): boolean => countOf(text, `${CLAUSE}\n`) === 1
 
 describe('AC-nextjs-used-atoms-43: core README points at the package', () => {
   it('holds the setup sentence byte for byte', () => {
-    expect(holdsSetup(core)).toBe(true)
+    expect(hasSetup(core)).toBe(true)
   })
 
   it('control: a README without the pointer in the setup sentence fails', () => {
-    expect(holdsSetup(core.replace(SETUP, ''))).toBe(false)
+    expect(hasSetup(core.replace(SETUP, ''))).toBe(false)
   })
 
   it('opens the Next.js section with the paragraph, byte for byte', () => {
-    expect(holdsNextjsOpening(core)).toBe(true)
+    expect(hasNextjsOpening(core)).toBe(true)
   })
 
   it('control: a README without the opening paragraph fails', () => {
-    expect(holdsNextjsOpening(core.replace(NEXTJS_OPENING, '#### Next.js'))).toBe(false)
+    expect(hasNextjsOpening(core.replace(NEXTJS_OPENING, '#### Next.js'))).toBe(false)
   })
 
   it('ends the account of what ships every atom with the sentence naming the package, 149 bytes', () => {
     expect(fingerprint(SENTENCE)).toEqual({ bytes: 149, sha256: '7c48b51946a6733d' })
-    expect(holdsSentence(core)).toBe(true)
+    expect(hasSentence(core)).toBe(true)
   })
 
   it('control: a README with the sentence removed fails', () => {
-    expect(holdsSentence(core.replace(SENTENCE, ''))).toBe(false)
+    expect(hasSentence(core.replace(SENTENCE, ''))).toBe(false)
   })
 })
 
 describe('AC-nextjs-used-atoms-43: the root README points at the package', () => {
   it('has the table row straight after core’s', () => {
-    expect(holdsRow(root)).toBe(true)
+    expect(hasRow(root)).toBe(true)
   })
 
   it('control: a README without the row fails', () => {
-    expect(holdsRow(root.replace(`${TABLE_ROW}\n`, ''))).toBe(false)
+    expect(hasRow(root.replace(`${TABLE_ROW}\n`, ''))).toBe(false)
   })
 
   it('has the clause naming the package after the PostCSS plugin’s line', () => {
-    expect(holdsClause(root)).toBe(true)
+    expect(hasClause(root)).toBe(true)
   })
 
   it('control: a README with the clause removed fails', () => {
     expect(
-      holdsClause(
+      hasClause(
         root.replace(CLAUSE, 'does the same; a host that runs Lightning CSS directly uses'),
       ),
     ).toBe(false)

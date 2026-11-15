@@ -61,13 +61,14 @@ function firstReleaseNote(changesetDir: string, changelogPath: string, name: str
  * Whether the note names the floor the manifest asks of Next.js, as it writes it: `>=16.2.0` is
  * `Next.js 16.2.0`.
  */
-const namesFloor = (text: string, peerDependencies: Record<string, string>): boolean =>
+const hasFloor = (text: string, peerDependencies: Record<string, string>): boolean =>
   text.includes(`Next.js ${(peerDependencies.next ?? '').replace('>=', '')}`)
 
 /**
  * Whether the note says the package is released at the same version as core.
  */
-const versionsWithCore = (text: string): boolean => text.includes('same version as `@navecss/core`')
+const isVersionedWithCore = (text: string): boolean =>
+  text.includes('same version as `@navecss/core`')
 
 /**
  * Every spelling of the name of the framework that is not `Next.js`, as found.
@@ -110,11 +111,11 @@ describe('AC-nextjs-used-atoms-44: the first release of the package is a minor c
     const { text } = real()
     expect(text).toContain('`withNave()`')
     expect(text).toContain(`\`${name}/postcss\``)
-    expect(namesFloor(text, manifest.peerDependencies)).toBe(true)
+    expect(hasFloor(text, manifest.peerDependencies)).toBe(true)
   })
 
   it('says the package is released at the same version as @navecss/core', () => {
-    expect(versionsWithCore(real().text)).toBe(true)
+    expect(isVersionedWithCore(real().text)).toBe(true)
   })
 
   it('corrects the earlier note: the core PostCSS plugin still ships every atom, and prune is the Next.js way to ship fewer', () => {
@@ -167,15 +168,15 @@ describe('AC-nextjs-used-atoms-44: which note is read', () => {
 describe('AC-nextjs-used-atoms-44: what the note is checked for', () => {
   it('says the same version only when it says so', () => {
     expect(
-      versionsWithCore('It is released at the same version as `@navecss/core`: upgrade.'),
+      isVersionedWithCore('It is released at the same version as `@navecss/core`: upgrade.'),
     ).toBe(true)
-    expect(versionsWithCore('It is not released with `@navecss/core`.')).toBe(false)
+    expect(isVersionedWithCore('It is not released with `@navecss/core`.')).toBe(false)
   })
 
   it('asks the floor of the manifest’s next peer', () => {
     const { text } = real()
-    expect(namesFloor(text, { next: '>=16.2.0' })).toBe(true)
-    expect(namesFloor(text, { next: '>=16.3.0' })).toBe(false)
+    expect(hasFloor(text, { next: '>=16.2.0' })).toBe(true)
+    expect(hasFloor(text, { next: '>=16.3.0' })).toBe(false)
   })
 
   it.each(['Next.JS', 'NEXT.js', 'next.js', 'NextJS', 'Next JS', 'Nextjs'])(
