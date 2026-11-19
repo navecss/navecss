@@ -31,7 +31,7 @@
     "@navecss/tokens": ">=0.1.0 <1.0.0"
   },
   "dependencies": {
-    "stylelint-declaration-strict-value": "1.12.1",
+    "stylelint-declaration-strict-value": "1.13.0",
     "postcss": "^8.5.32",
     "postcss-value-parser": "^4.2.0"
   },
