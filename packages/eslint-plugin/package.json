@@ -48,10 +48,10 @@
   "devDependencies": {
     "@navecss/core": "workspace:*",
     "@types/node": "^26.6.6",
-    "@typescript-eslint/types": "8.72.1",
+    "@typescript-eslint/types": "8.72.2",
     "@vitest/coverage-v8": "5.1.0",
     "astro-eslint-parser": "3.2.0",
-    "eslint": "10.14.0",
+    "eslint": "10.15.0",
     "typescript": "6.0.3",
     "vitest": "5.1.0"
   },
