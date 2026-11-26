@@ -25,7 +25,7 @@ runs:
       run: echo "MISE_NODE_VERSION=$NODE_VERSION" >> "$GITHUB_ENV"
 
     - name: Install mise-pinned toolchain (node + pnpm)
-      uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5.2.7
+      uses: jdx/mise-action@924e7c586e33d7d4bae9c14e26c5d22e2beb6e78 # v5.3.0
       with:
         version: 2026.8.3
         # One cache per Node: the floor legs install a different Node from the same mise.toml.
